@@ -1,0 +1,60 @@
+--- a/AmberTools/src/parmed/parmed/tools/actions.py
++++ b/AmberTools/src/parmed/parmed/tools/actions.py
+@@ -3264,7 +3264,7 @@ class addPDB(Action):
+             haveicodes = False
+             ncmts += ['Residue insertion code (iCode) not present in PDB file',
+                       'If present: %FLAG RESIDUE_ICODE, %FORMAT(20a4)']
+-        self.parm.add_flag('RESIDUE_NUMBER', '20I4', data=resnums,
++        self.parm.add_flag('RESIDUE_NUMBER', '16I5', data=resnums,
+                            comments=ncmts)
+         self.parm.add_flag('RESIDUE_CHAINID', '20a4', data=chainids,
+                           comments=['Residue chain ID (chainId) read from PDB '
+--- a/AmberTools/src/xray/add_pdb.F90
++++ b/AmberTools/src/xray/add_pdb.F90
+@@ -297,7 +297,7 @@ program add_pdb
+    !---------------------------------------------------------------------------
+    ! Append new data to outfile
+    
+-   fmt='(20I4)'
++   fmt='(16I5)'
+    write(out_lun,'(A)') &
+          '%FLAG RESIDUE_NUMBER', &
+          '%COMMENT Residue number (resSeq) read from PDB file; DIMENSION(NRES)'
+--- a/src/pmemd/src/xray_interface_impl_cpu.F90
++++ b/src/pmemd/src/xray_interface_impl_cpu.F90
+@@ -143,7 +143,7 @@ contains
+                atom_element(natom), atom_altloc(natom), residue_number(nres))
+ 
+          call nxtsec_reset()
+-         call nxtsec(prmtop_lun,STDOUT,0,'(20I4)','RESIDUE_NUMBER',fmt,ierr)
++         call nxtsec(prmtop_lun,STDOUT,0,'(16I5)','RESIDUE_NUMBER',fmt,ierr)
+          read(prmtop_lun,fmt) residue_number
+          call nxtsec(prmtop_lun,STDOUT,0,'(20A4)','RESIDUE_CHAINID',fmt,ierr)
+          read(prmtop_lun,fmt) residue_chainid
+@@ -207,7 +207,8 @@ contains
+       character(len=*), intent(in) :: filename
+       ! locals
+       character(len=4) :: name,resName,segID,element,altLoc,chainID,iCode
+-      integer :: serial,resSeq
++      character(len=5) :: serial  ! for hydrid36 approach
++      integer :: resSeq
+       real(real_kind) :: xyz(3),occupancy,tempFactor
+       character(len=80) :: line
+       integer :: unit, iostat, iatom, ires, i, j, ndup, nmiss
+@@ -224,13 +225,15 @@ contains
+          if (iostat/=0) exit
+          if (line(1:6)=='END   ') exit
+          if (line(1:6)=='ATOM  ' .or. line(1:6)=='HETATM') then
+-            read(line,'(6X,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,2A4)') &
++            read(line,'(6X,A5,1X,A4,A1,A3,1X,A1,I5,A1,2X,3F8.3,2F6.2,6X,2A4)') &  ! quick fix for supercell
++!           read(line,'(6X,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,6X,2A4)') &
+                   serial,name,altLoc,resName,chainID,resSeq,iCode, &
+                   xyz,occupancy,tempFactor,segID,element
+             i = find_atom(name,resName,chainID,resSeq,iCode)
+             if (i<0) then
+                write(stdout,'(A)') 'Atom not found:'
+                write(stdout,'(A)') trim(line)
++               write(stdout, *) name,resName,chainID,resSeq,iCode
+                stop
+             end if
+             if (atom_occupancy(i) >= 0) then
